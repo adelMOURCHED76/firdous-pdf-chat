@@ -15,46 +15,115 @@ def load_model():
     # نموذج خفيف وفعال يدعم العربية والإنجليزية محلياً
     return SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
 
-model = load_model()
+# محاولة تحميل النموذج مع معالجة الأخطاء
+try:
+    model = load_model()
+except Exception as e:
+    st.error(f"خطأ في تحميل النموذج: {e}")
+    st.stop()
 
 # --- CSS مخصص (Glassmorphism & RTL) ---
+# تم تحسين الـ CSS ليكون أكثر توافقاً مع Streamlit وتجنب تداخل العناصر
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
-    html, body, [class*="css"] { font-family: 'Cairo', sans-serif; direction: rtl; text-align: right; }
     
-    .stApp {
+    /* الأساسيات وتغيير الاتجاه للعربية */
+    .main {
+        direction: rtl;
+    }
+    
+    [data-testid="stAppViewContainer"] {
         background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
         color: white;
+        font-family: 'Cairo', sans-serif;
     }
 
-    /* تأثير الزجاج الشفاف */
+    /* تحسين القائمة الجانبية */
+    [data-testid="stSidebar"] {
+        background-color: rgba(15, 23, 42, 0.9) !important;
+        backdrop-filter: blur(10px);
+        border-left: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    [data-testid="stSidebar"] .stMarkdown p {
+        color: #cbd5e1;
+        text-align: right;
+    }
+
+    /* تأثير الزجاج الشفاف للحاويات */
     .glass-card {
         background: rgba(255, 255, 255, 0.05);
         backdrop-filter: blur(15px);
         border-radius: 20px;
         border: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 25px;
-        margin-bottom: 20px;
+        padding: 2rem;
+        margin-bottom: 2rem;
         box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        color: white;
     }
 
+    /* فقاعة الدردشة */
     .chat-bubble {
         background: rgba(255, 255, 255, 0.08);
-        padding: 20px;
+        padding: 1.5rem;
         border-radius: 15px;
         border-right: 5px solid #6366f1;
-        margin: 15px 0;
+        margin: 1rem 0;
         line-height: 1.6;
+        color: #f1f5f9;
+        text-align: right;
     }
 
-    .stButton>button {
-        background: linear-gradient(90deg, #4f46e5, #7c3aed);
-        color: white;
-        border-radius: 12px;
-        border: none;
-        padding: 10px 20px;
-        font-weight: bold;
+    /* تنسيق الأزرار */
+    .stButton > button {
+        background: linear-gradient(90deg, #4f46e5, #7c3aed) !important;
+        color: white !important;
+        border-radius: 12px !important;
+        border: none !important;
+        padding: 0.6rem 2rem !important;
+        font-weight: 700 !important;
+        width: 100%;
+        transition: all 0.3s ease !important;
+        font-family: 'Cairo', sans-serif !important;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 10px 20px rgba(79, 70, 229, 0.3) !important;
+        opacity: 0.9;
+    }
+
+    /* تنسيق حقول الإدخال لتناسب التصميم الداكن */
+    .stTextInput input {
+        background-color: rgba(255, 255, 255, 0.07) !important;
+        color: white !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        padding: 12px !important;
+        text-align: right !important;
+        direction: rtl !important;
+    }
+    
+    .stTextInput label {
+        color: #94a3b8 !important;
+        text-align: right !important;
+        width: 100%;
+    }
+
+    /* تحسين نصوص Markdown */
+    .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+        text-align: right;
+        direction: rtl;
+    }
+
+    /* إخفاء عناصر Streamlit الافتراضية */
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* تصحيح المسافات العلوية */
+    .block-container {
+        padding-top: 2rem !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -64,20 +133,29 @@ def process_files(uploaded_files):
     all_chunks = []
     for uploaded_file in uploaded_files:
         text = ""
-        if uploaded_file.type == "application/pdf":
-            reader = PdfReader(uploaded_file)
-            for page in reader.pages:
-                text += (page.extract_text() or "") + "\n"
-        else:
-            text = uploaded_file.getvalue().decode("utf-8")
+        try:
+            if uploaded_file.type == "application/pdf":
+                reader = PdfReader(uploaded_file)
+                for page in reader.pages:
+                    extracted = page.extract_text()
+                    if extracted:
+                        text += extracted + "\n"
+            else:
+                text = uploaded_file.getvalue().decode("utf-8")
+        except Exception as e:
+            st.error(f"خطأ في قراءة الملف {uploaded_file.name}: {e}")
+            continue
         
-        # تقسيم النص إلى فقرات
+        # تقسيم النص إلى فقرات ذات معنى
         chunks = [p.strip() for p in text.split('\n') if len(p.strip()) > 30]
         for chunk in chunks:
             all_chunks.append({"text": chunk, "source": uploaded_file.name})
     return all_chunks
 
 def get_semantic_results(query, chunks, top_k=3):
+    if not chunks:
+        return []
+    
     texts = [c['text'] for c in chunks]
     # تحويل النصوص والمتطلبات إلى Embeddings
     embeddings = model.encode(texts)
@@ -89,46 +167,61 @@ def get_semantic_results(query, chunks, top_k=3):
     index.add(np.array(embeddings).astype('float32'))
     
     # البحث عن أقرب المتجهات
-    D, I = index.search(np.array(query_embedding).astype('float32'), k=top_k)
+    D, I = index.search(np.array(query_embedding).astype('float32'), k=min(top_k, len(chunks)))
     
     results = []
     for idx in I[0]:
-        if idx < len(chunks):
+        if idx != -1 and idx < len(chunks):
             results.append(chunks[idx])
     return results
 
 # --- الواجهة الرسومية ---
 st.markdown('<div class="glass-card">', unsafe_allow_html=True)
 st.title("🛡️ فردوس Local AI")
-st.write("بحث دلالي محلي بالكامل (بدون إنترنت أو API) يدعم PDF و TXT")
+st.markdown("### بحث دلالي محلي بالكامل (بدون إنترنت أو API) يدعم PDF و TXT")
 st.markdown('</div>', unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.header("الملفات")
+    st.header("📂 إدارة الملفات")
     uploaded_files = st.file_uploader("ارفع ملفاتك هنا", type=["pdf", "txt"], accept_multiple_files=True)
+    st.markdown('---')
+    st.info("يتم تحليل الملفات محلياً على جهازك لضمان الخصوصية التامة.")
     st.markdown('</div>', unsafe_allow_html=True)
 
 if uploaded_files:
+    # استخدام session_state لتخزين البيانات المعالجة
     if 'processed_chunks' not in st.session_state or len(uploaded_files) != st.session_state.get('file_count', 0):
-        with st.spinner('جاري تحليل الملفات محلياً...'):
+        with st.spinner('جاري تحليل الملفات وبناء قاعدة البيانات المتجهة...'):
             st.session_state.processed_chunks = process_files(uploaded_files)
             st.session_state.file_count = len(uploaded_files)
-            st.success("تمت معالجة الملفات!")
+            if st.session_state.processed_chunks:
+                st.success(f"تمت معالجة {len(uploaded_files)} ملفات بنجاح!")
+            else:
+                st.warning("لم يتم العثور على نصوص كافية في الملفات المرفوعة.")
 
-    query = st.text_input("ما الذي تبحث عنه في الملفات؟")
-    
-    if query:
-        with st.spinner('جاري البحث الدلالي...'):
-            results = get_semantic_results(query, st.session_state.processed_chunks)
-            
-            st.subheader("أدق الفقرات ذات الصلة بالمعنى:")
-            for res in results:
-                st.markdown(f"""
-                    <div class="chat-bubble">
-                        <small style="color: #818cf8;">المصدر: {res['source']}</small><br>
-                        {res['text']}
-                    </div>
-                """, unsafe_allow_html=True)
+    if st.session_state.get('processed_chunks'):
+        query = st.text_input("🔍 ما الذي تبحث عنه في الملفات؟ (سأفهم المعنى حتى لو اختلفت الكلمات)")
+        
+        if query:
+            with st.spinner('جاري البحث عن أدق الفقرات...'):
+                results = get_semantic_results(query, st.session_state.processed_chunks)
+                
+                if results:
+                    st.markdown("### 🎯 أدق الفقرات ذات الصلة:")
+                    for res in results:
+                        st.markdown(f"""
+                            <div class="chat-bubble">
+                                <small style="color: #818cf8; font-weight: bold;">📍 المصدر: {res['source']}</small><br>
+                                {res['text']}
+                            </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.warning("لم يتم العثور على نتائج مطابقة للمعنى.")
 else:
-    st.info("قم برفع ملفاتك من القائمة الجانبية للبدء.")
+    st.markdown("""
+    <div style="text-align: center; padding: 3rem; opacity: 0.7;">
+        <h3>👋 أهلاً بك في فردوس AI</h3>
+        <p>يرجى رفع ملفات PDF أو TXT من القائمة الجانبية للبدء في البحث الذكي.</p>
+    </div>
+    """, unsafe_allow_html=True)
