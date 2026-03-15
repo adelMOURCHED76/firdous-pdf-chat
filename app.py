@@ -1,5 +1,5 @@
 import streamlit as st
-from PyPDF2 import PdfReader
+import pdfplumber
 import re
 import io
 import numpy as np
@@ -23,12 +23,10 @@ except Exception as e:
     st.stop()
 
 # --- CSS مخصص (Glassmorphism & RTL) ---
-# تم تحسين الـ CSS ليكون أكثر توافقاً مع Streamlit وتجنب تداخل العناصر
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
     
-    /* الأساسيات وتغيير الاتجاه للعربية */
     .main {
         direction: rtl;
     }
@@ -39,7 +37,6 @@ st.markdown("""
         font-family: 'Cairo', sans-serif;
     }
 
-    /* تحسين القائمة الجانبية */
     [data-testid="stSidebar"] {
         background-color: rgba(15, 23, 42, 0.9) !important;
         backdrop-filter: blur(10px);
@@ -51,7 +48,6 @@ st.markdown("""
         text-align: right;
     }
 
-    /* تأثير الزجاج الشفاف للحاويات */
     .glass-card {
         background: rgba(255, 255, 255, 0.05);
         backdrop-filter: blur(15px);
@@ -63,7 +59,6 @@ st.markdown("""
         color: white;
     }
 
-    /* فقاعة الدردشة */
     .chat-bubble {
         background: rgba(255, 255, 255, 0.08);
         padding: 1.5rem;
@@ -75,7 +70,6 @@ st.markdown("""
         text-align: right;
     }
 
-    /* تنسيق الأزرار */
     .stButton > button {
         background: linear-gradient(90deg, #4f46e5, #7c3aed) !important;
         color: white !important;
@@ -94,7 +88,6 @@ st.markdown("""
         opacity: 0.9;
     }
 
-    /* تنسيق حقول الإدخال لتناسب التصميم الداكن */
     .stTextInput input {
         background-color: rgba(255, 255, 255, 0.07) !important;
         color: white !important;
@@ -111,17 +104,14 @@ st.markdown("""
         width: 100%;
     }
 
-    /* تحسين نصوص Markdown */
     .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
         text-align: right;
         direction: rtl;
     }
 
-    /* إخفاء عناصر Streamlit الافتراضية */
     header {visibility: hidden;}
     footer {visibility: hidden;}
     
-    /* تصحيح المسافات العلوية */
     .block-container {
         padding-top: 2rem !important;
     }
@@ -135,16 +125,20 @@ def process_files(uploaded_files):
         text = ""
         try:
             if uploaded_file.type == "application/pdf":
-                reader = PdfReader(uploaded_file)
-                for page in reader.pages:
-                    extracted = page.extract_text()
-                    if extracted:
-                        text += extracted + "\n"
+                # استخدام pdfplumber بدلاً من PyPDF2 لدقة أعلى في العربية
+                with pdfplumber.open(uploaded_file) as pdf:
+                    for page in pdf.pages:
+                        extracted = page.extract_text()
+                        if extracted:
+                            text += extracted + "\n"
             else:
                 text = uploaded_file.getvalue().decode("utf-8")
         except Exception as e:
             st.error(f"خطأ في قراءة الملف {uploaded_file.name}: {e}")
             continue
+        
+        # تنظيف النص من الرموز الغريبة الناتجة عن أخطاء التشفير
+        text = re.sub(r'[^\w\s\.\!\؟\،\:\-\(\)]', '', text)
         
         # تقسيم النص إلى فقرات ذات معنى
         chunks = [p.strip() for p in text.split('\n') if len(p.strip()) > 30]
