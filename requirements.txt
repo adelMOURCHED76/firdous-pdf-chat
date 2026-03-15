@@ -1,0 +1,6 @@
+streamlit==1.32.0
+PyPDF2==3.0.1
+sentence-transformers==2.5.1
+faiss-cpu==1.8.0
+numpy==1.26.4
+torch==2.2.1 --index-url https://download.pytorch.org/whl/cpu
