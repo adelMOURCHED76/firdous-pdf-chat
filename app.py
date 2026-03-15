@@ -1,10 +1,9 @@
 import streamlit as st
 from PyPDF2 import PdfReader
 import re
-import io
 import numpy as np
 from sentence_transformers import SentenceTransformer
-import faiss
+import faiss faiss
 
 # إعدادات الصفحة
 st.set_page_config(page_title="Firdous Local AI", page_icon="🛡️", layout="wide")
