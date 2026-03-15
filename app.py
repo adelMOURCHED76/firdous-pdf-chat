@@ -3,7 +3,7 @@ from PyPDF2 import PdfReader
 import re
 import numpy as np
 from sentence_transformers import SentenceTransformer
-import faiss faiss
+import faiss
 
 # إعدادات الصفحة
 st.set_page_config(page_title="Firdous Local AI", page_icon="🛡️", layout="wide")
